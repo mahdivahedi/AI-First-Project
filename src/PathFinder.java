@@ -1,9 +1,10 @@
 import java.awt.*;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
 import java.util.List;
-import java.util.stream.Stream;
 
 public class PathFinder {
 
@@ -29,17 +30,47 @@ public class PathFinder {
     }
 
     public void printMap() {
-        for (int i = 0; i < map.length; i++) {
+        for (String[] strings : map) {
             for (int j = 0; j < map[0].length; j++) {
-                System.out.print(map[i][j] + "\t");
+                System.out.print(strings[j] + "\t");
             }
             System.out.println();
         }
         System.out.println();
     }
 
+    private void writeOutput(List<Point> path) throws IOException {
+        File output = new File("output.txt");
+        StringBuilder stringBuilder = new StringBuilder();
+        int cost = 0;
+        for (int i = 0; i < path.size() - 1; i++) {
+            cost += map[path.get(i).x][path.get(i).y].charAt(0) - '0';
+            if (path.get(i).x == path.get(i + 1).x) {
+                if (path.get(i).y - path.get(i + 1).y == 1) {
+                    stringBuilder.append('L');
+                }else {
+                    stringBuilder.append('R');
+                }
+                stringBuilder.append(" ");
+            }else {
+                if (path.get(i).x - path.get(i + 1).x == 1) {
+                    stringBuilder.append('U');
+                }else {
+                    stringBuilder.append('D');
+                }
+                stringBuilder.append(" ");
+            }
+        }
+        cost += map[path.get(path.size() - 1).x][path.get(path.size() - 1).y].charAt(0) - '0';
+        FileWriter fileWriter = new FileWriter(output);
+        fileWriter.write(stringBuilder.toString() + "\n");
+        fileWriter.write(cost + "\n");
+        fileWriter.write(path.size() + "");
+        fileWriter.close();
+    }
 
-    public void findRoute() {
+
+    public void findRoute() throws IOException {
         while (true) {
             var nearestButter = findNearestButter();
             if (nearestButter == null)
@@ -47,6 +78,7 @@ public class PathFinder {
             var path = robotPath(aStar(nearestButter));
             path.forEach(System.out::println);
             System.out.println("################################");
+            writeOutput(path);
         }
     }
 
@@ -67,7 +99,7 @@ public class PathFinder {
         while (!frontier.isEmpty()) {
             Point nearestButter = frontier.remove(0);
             explored[nearestButter.x][nearestButter.y] = 1;
-            if (map[nearestButter.x][nearestButter.y].contains("b") && !map[nearestButter.x][nearestButter.y].contains("n"))
+            if (map[nearestButter.x][nearestButter.y].contains("b"))
                 return nearestButter;
             var neighbors = neighborProduction(nearestButter);
             for (Point p : neighbors) {
@@ -78,7 +110,6 @@ public class PathFinder {
             }
         }
         return null;
-//        return nearestPoint(robotLocation, "b");
     }
 
     private boolean checkNeighbor(Point statusPoint) {
@@ -116,7 +147,6 @@ public class PathFinder {
         frontier.add(new Node(butter, null, manhattanDistance(butter, dest)));
         Node node = null;
         while (!frontier.isEmpty()) {
-//            printMap();
             node = frontier.poll();
             map[butter.x][butter.y] = map[butter.x][butter.y].charAt(0) + "";
             butter = node.point;
@@ -126,10 +156,8 @@ public class PathFinder {
                 map[butter.x][butter.y] = map[butter.x][butter.y].charAt(0) + "p";
                 break;
             }
-//            map[butter.x][butter.y] = map[butter.x][butter.y].charAt(0) + "b";
             updateFrontier(butter, dest, (PriorityQueue<Node>) frontier, mapInfo, node);
         }
-//        map[butter.x][butter.y] = map[butter.x][butter.y].charAt(0) + "";
         map[saveStatusButter.x][saveStatusButter.y] = map[saveStatusButter.x][saveStatusButter.y].charAt(0) + "b";
         if (!findPath)
             return null;
@@ -185,7 +213,6 @@ public class PathFinder {
                 });
     }
 
-
     public List<Point> robotPath(List<Point> butterPath) {
         var robotPath = new LinkedList<Point>();
         robotPath = (LinkedList<Point>) aStar(robotLocation, findBehind(butterPath.get(0), butterPath.get(1)));
@@ -204,7 +231,6 @@ public class PathFinder {
             robotLocation = robotPath.get(robotPath.size() - 1);
             map[robotLocation.x][robotLocation.y] = map[butterPath.get(i).x][butterPath.get(i).y].charAt(0) + "r";
         }
-//        robotPath.add(butterPath.get(butterPath.size() - 2));
         map[butterPath.get(butterPath.size() - 1).x][butterPath.get(butterPath.size() - 1).y] = "pb";
         map[robotLocation.x][robotLocation.y] = map[robotLocation.x][robotLocation.y].charAt(0) + "";
         robotLocation = robotPath.get(robotPath.size() - 1);
@@ -242,7 +268,6 @@ public class PathFinder {
         return result;
     }
 
-
     private List<Point> robotNeighbors(Point point) {
         var result = new ArrayList<Point>();
         var translate = new Point(point);
@@ -260,8 +285,6 @@ public class PathFinder {
             result.add(new Point(translate));
         return result;
     }
-
-
 
     private boolean isValidLocation(Point point, char direction) {
         return point.x >= 0 && point.x < map.length
@@ -309,7 +332,6 @@ public class PathFinder {
                 }
         return dest;
     }
-
 
     private int manhattanDistance(Point source, Point dest) {
         return Math.abs(source.x - dest.x) + Math.abs(source.y - dest.y);
