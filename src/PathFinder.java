@@ -29,9 +29,27 @@ public class PathFinder {
     }
 
     public void printMap() {
-        Stream<String> a = Arrays.stream(map).flatMap(Arrays::stream);
-        a.forEachOrdered(c -> System.out.print(c + " "));
+        for (int i = 0; i < map.length; i++) {
+            for (int j = 0; j < map[0].length; j++) {
+                System.out.print(map[i][j] + "\t");
+            }
+            System.out.println();
+        }
+        System.out.println();
     }
+
+
+    public void findRoute() {
+        while (true) {
+            var nearestButter = findNearestButter();
+            if (nearestButter == null)
+                break;
+            var path = robotPath(aStar(nearestButter));
+            path.forEach(System.out::println);
+            System.out.println("################################");
+        }
+    }
+
     
     private void setRobotLocation() {
         for (int i = 0; i < map.length; i++) {
@@ -77,19 +95,20 @@ public class PathFinder {
         translate.translate(0, 1);
         if (checkNeighbor(translate))
             result.add(new Point(translate));
-        translate.translate(0, -1);
+        translate.translate(0, -2);
         if (checkNeighbor(translate))
             result.add(new Point(translate));
-        translate.translate(1, 0);
+        translate.translate(1, 1);
         if (checkNeighbor(translate))
             result.add(new Point(translate));
-        translate.translate(-1, 0);
+        translate.translate(-2, 0);
         if (checkNeighbor(translate))
             result.add(new Point(translate));
         return result;
     }
 
     public List<Point> aStar(Point butter) {
+        Point saveStatusButter = new Point(butter.x, butter.y);
         var frontier = new PriorityQueue<Node>();
         int[][] mapInfo = new int[map.length][map[0].length];
         boolean findPath = false;
@@ -97,15 +116,21 @@ public class PathFinder {
         frontier.add(new Node(butter, null, manhattanDistance(butter, dest)));
         Node node = null;
         while (!frontier.isEmpty()) {
+//            printMap();
             node = frontier.poll();
+            map[butter.x][butter.y] = map[butter.x][butter.y].charAt(0) + "";
             butter = node.point;
             mapInfo[butter.x][butter.y] = 1;
             if (isGoal(butter)) {
                 findPath = true;
+                map[butter.x][butter.y] = map[butter.x][butter.y].charAt(0) + "p";
                 break;
             }
+//            map[butter.x][butter.y] = map[butter.x][butter.y].charAt(0) + "b";
             updateFrontier(butter, dest, (PriorityQueue<Node>) frontier, mapInfo, node);
         }
+//        map[butter.x][butter.y] = map[butter.x][butter.y].charAt(0) + "";
+        map[saveStatusButter.x][saveStatusButter.y] = map[saveStatusButter.x][saveStatusButter.y].charAt(0) + "b";
         if (!findPath)
             return null;
         var path = new LinkedList<Point>();
@@ -164,18 +189,26 @@ public class PathFinder {
     public List<Point> robotPath(List<Point> butterPath) {
         var robotPath = new LinkedList<Point>();
         robotPath = (LinkedList<Point>) aStar(robotLocation, findBehind(butterPath.get(0), butterPath.get(1)));
+        robotPath.add(butterPath.get(0));
         map[robotLocation.x][robotLocation.y] = map[robotLocation.x][robotLocation.y].charAt(0) + "";
-        robotLocation = butterPath.get(0);
+        robotLocation = robotPath.get(robotPath.size() - 1);
         map[robotLocation.x][robotLocation.y] = map[butterPath.get(0).x][butterPath.get(0).y].charAt(0) + "r";
+        map[butterPath.get(1).x][butterPath.get(1).y] = map[butterPath.get(1).x][butterPath.get(1).y].charAt(0) + "p";
         for (int i = 1; i < butterPath.size() - 1; i++) {
+            map[butterPath.get(i+1).x][butterPath.get(i+1).y] = map[butterPath.get(i+1).x][butterPath.get(i+1).y].charAt(0) + "p";
             var robotStep = aStar(robotLocation, findBehind(butterPath.get(i), butterPath.get(i + 1)));
-            System.out.println(findBehind(butterPath.get(i), butterPath.get(i + 1)));
+            robotStep.remove(0);
             robotPath.addAll(robotStep);
+            robotPath.add(butterPath.get(i));
             map[robotLocation.x][robotLocation.y] = map[robotLocation.x][robotLocation.y].charAt(0) + "";
-            robotLocation = butterPath.get(i);
+            robotLocation = robotPath.get(robotPath.size() - 1);
             map[robotLocation.x][robotLocation.y] = map[butterPath.get(i).x][butterPath.get(i).y].charAt(0) + "r";
         }
-        robotPath.add(butterPath.get(butterPath.size() - 2));
+//        robotPath.add(butterPath.get(butterPath.size() - 2));
+        map[butterPath.get(butterPath.size() - 1).x][butterPath.get(butterPath.size() - 1).y] = "pb";
+        map[robotLocation.x][robotLocation.y] = map[robotLocation.x][robotLocation.y].charAt(0) + "";
+        robotLocation = robotPath.get(robotPath.size() - 1);
+        map[robotLocation.x][robotLocation.y] = map[robotLocation.x][robotLocation.y].charAt(0) + "r";
         return robotPath;
     }
 
@@ -235,6 +268,7 @@ public class PathFinder {
                 && point.y >= 0 && point.y < map[0].length
                 && !map[point.x][point.y].contains("x")
                 && !map[point.x][point.y].contains("b")
+                && !map[point.x][point.y].contains("r")
                 && checkDirection(new Point(point), direction);
     }
 
@@ -242,7 +276,8 @@ public class PathFinder {
         return point.x >= 0 && point.x < map.length
                 && point.y >= 0 && point.y < map[0].length
                 && !map[point.x][point.y].contains("x")
-                && !map[point.x][point.y].contains("b");
+                && !map[point.x][point.y].contains("b")
+                && !map[point.x][point.y].contains("r");
     }
 
     private boolean checkDirection(Point point, char direction) {
