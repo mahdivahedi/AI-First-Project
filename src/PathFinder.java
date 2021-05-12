@@ -7,7 +7,6 @@ import java.util.*;
 import java.util.List;
 
 public class PathFinder {
-
     private String[][] map;
     private Point robotLocation;
 
@@ -40,7 +39,7 @@ public class PathFinder {
     }
 
     private void writeOutput(List<Point> path) throws IOException {
-        File output = new File("output.txt");
+        File output = new File("output4.txt");
         StringBuilder stringBuilder = new StringBuilder();
         int cost = 0;
         for (int i = 0; i < path.size() - 1; i++) {
@@ -65,24 +64,33 @@ public class PathFinder {
         FileWriter fileWriter = new FileWriter(output);
         fileWriter.write(stringBuilder.toString() + "\n");
         fileWriter.write(cost + "\n");
-        fileWriter.write(path.size() + "");
+        fileWriter.write(path.size() + "\n\n");
         fileWriter.close();
     }
-
 
     public void findRoute() throws IOException {
         while (true) {
             var nearestButter = findNearestButter();
             if (nearestButter == null)
                 break;
-            var path = robotPath(aStar(nearestButter));
-            path.forEach(System.out::println);
-            System.out.println("################################");
-            writeOutput(path);
+            var route = aStar(nearestButter);
+            if (route != null) {
+                var path = robotPath(route);
+                if (path != null) {
+                    path.forEach(System.out::println);
+                    System.out.println("################################");
+                    writeOutput(path);
+                }else {
+                    System.out.println("There is no route.");
+                    break;
+                }
+            }else {
+                System.out.println("There is no route.");
+                break;
+            }
         }
     }
 
-    
     private void setRobotLocation() {
         for (int i = 0; i < map.length; i++) {
             for (int j = 0; j < map[0].length; j++) {
@@ -193,6 +201,46 @@ public class PathFinder {
             node = node.parent;
         }
         return path;
+    }
+
+    public List<Point> bbfs(Point butter){
+        List<Point> intersect;
+        Point dest;
+        int[][] mapInfo = new int[map.length][map[0].length];
+        HashMap<Point, Node> pointNode = new HashMap<>();
+        var startNode = new Node(butter, null, 0);
+        pointNode.put(butter, startNode);
+        var startQueue = new ArrayDeque<>(List.of(startNode));
+        HashMap<Point, ArrayDeque<Node>> queueDestMap = new HashMap<>();
+        for (Point p : findAllDest()) {
+            var node = new Node(p, null, 0);
+            queueDestMap.put(p, new ArrayDeque<>(List.of(node)));
+            pointNode.put(p, node);
+        }
+        Node start = null;
+        Node end = null;
+        mapInfo[butter.x][butter.y] = 1;
+        for (var d : queueDestMap.keySet())
+            mapInfo[d.x][d.y] = 2;
+        while (!startQueue.isEmpty() && !queueDestMap.isEmpty()) {
+            start = startQueue.pop();
+            butter = start.point;
+
+        }
+    }
+
+    private List<Point> findAllDest() {
+        var result = new ArrayList<Point>();
+        Point point;
+        for (int i = 0; i < map.length; i++)
+            for (int j = 0; j < map[0].length; j++)
+                if (isGoal(point = new Point(i, j)))
+                    result.add(point);
+        return result;
+    }
+
+    public List<Point> ids(Point butter, Point dest){
+        return new LinkedList<Point>();
     }
 
     private void updateRobotFrontier(Point source, Point dest, PriorityQueue<Node> frontier, int[][] mapInfo, Node node) {
