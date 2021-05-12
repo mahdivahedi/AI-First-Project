@@ -1,16 +1,22 @@
 import java.awt.*;
-import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.*;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Stream;
 
 public class PathFinder {
 
+    private int min;
+    private int i_source, j_source;
+    private ArrayList<Pair> optimalPath;
+    private boolean[][] visited;
+    private int[] dimension;
     private String[][] map;
     private Point robotLocation;
 
     public PathFinder(String mapPath) throws FileNotFoundException {
+        min = Integer.MAX_VALUE;
+        optimalPath = new ArrayList<>();
         setMap(mapPath);
         setRobotLocation();
     }
@@ -21,7 +27,7 @@ public class PathFinder {
 
     public void setMap(String mapPath) throws FileNotFoundException {
         Scanner scanner = new Scanner(new File(mapPath));
-        int[] dimension = Arrays.stream(scanner.nextLine().split("\t")).mapToInt(Integer::parseInt).toArray();
+        dimension = Arrays.stream(scanner.nextLine().split("\t")).mapToInt(Integer::parseInt).toArray();
         map = new String[dimension[0]][dimension[1]];
         int counter = 0;
         while (scanner.hasNextLine())
@@ -50,12 +56,15 @@ public class PathFinder {
         }
     }
 
-    
+
     private void setRobotLocation() {
         for (int i = 0; i < map.length; i++) {
             for (int j = 0; j < map[0].length; j++) {
-                if (map[i][j].contains("r"))
+                if (map[i][j].contains("r")) {
                     robotLocation = new Point(i, j);
+                    i_source = i;
+                    j_source = j;
+                }
             }
         }
     }
@@ -112,7 +121,7 @@ public class PathFinder {
         var frontier = new PriorityQueue<Node>();
         int[][] mapInfo = new int[map.length][map[0].length];
         boolean findPath = false;
-        var dest = nearestPoint(butter, "p");
+        var dest = nearestDestPointForButter(butter, "p");
         frontier.add(new Node(butter, null, manhattanDistance(butter, dest)));
         Node node = null;
         while (!frontier.isEmpty()) {
@@ -212,10 +221,11 @@ public class PathFinder {
         return robotPath;
     }
 
+    // check push from where between to argument
     private Point findBehind(Point from, Point to) {
         if (from.x == to.x) {
             return new Point(from.x, 2 * from.y - to.y);
-        }else {
+        } else {
             return new Point(2 * from.x - to.x, from.y);
         }
     }
@@ -290,14 +300,15 @@ public class PathFinder {
         } else if (direction == 'U') {
             point.translate(2, 0);
             return isValidLocation(new Point(point));
-        }else if (direction == 'D') {
+        } else if (direction == 'D') {
             point.translate(-2, 0);
             return isValidLocation(new Point(point));
         }
         return false;
     }
 
-    private Point nearestPoint(Point source, String destChar) {
+    // nearest destination for butter
+    private Point nearestDestPointForButter(Point source, String destChar) {
         Point tempPoint, dest = null;
         int temp;
         int minManhattan = Integer.MAX_VALUE;
@@ -319,16 +330,153 @@ public class PathFinder {
         return robotLocation;
     }
 
+    void iterativeDeepeningSearch() {
+
+        visited = new boolean[dimension[0]][dimension[1]];
+        // Creating Source and Destination States
+        Point destPoint = nearestDestPointForButter(new Point(i_source, j_source), "p");
+        State dest = new State(destPoint.x, destPoint.y, 0, dimension[0], dimension[1], visited);
+
+        visited[i_source][j_source] = true;
+        State source = new State(i_source, j_source, 1, dimension[0], dimension[1], visited);
+
+        // Repeating until limit found
+        for (int limit = 0; limit < (dimension[0] * dimension[1] - 1); limit++) {
+            for (int x = 0; x < dimension[0]; x++)
+                for (int y = 0; y < dimension[1]; y++) source.visited[x][y] = false;
+
+            // Depth Limited Search
+            depthLimitedSearch(source, dest, limit, dimension[0], dimension[1]);
+        }
+
+        optimalPath.forEach(p -> System.out.print(("->[" + p.first + "," + p.second + "]")));
+
+    }
+
+    // Private Function for Iterative Deepening Algorithm
+    private void depthLimitedSearch(State current, State dest, int limit, int n, int m) {
+        int i = current.first;
+        int j = current.second;
+
+        // If values out of bound
+        if (limit <= 0 || i < 0 || j < 0 || i >= n || j >= m)
+            return;
+
+        // Goal State Test
+        if (i == dest.first && j == dest.second) {
+            if (current.cost < min) {
+                min = current.cost;
+                optimalPath = current.path;
+
+                optimalPath.add(new Pair(i, j));
+            }
+
+            return;
+        }
+
+        // Horizontal and Vertical Conditional Search
+        if (i - 1 >= 0 && !current.visited[i - 1][j] && !map[i - 1][j].equals("x")) {
+            current.visited[i - 1][j] = true;
+            State next = new State(i - 1, j, current.cost + 1, n, m, current.visited);
+            next.AddPair(current.path, i, j);
+            depthLimitedSearch(next, dest, limit - 1, n, m);
+        }
+        if (i + 1 < n && !current.visited[i + 1][j] && !map[i + 1][j].equals("x")) {
+            current.visited[i + 1][j] = true;
+            State next = new State(i + 1, j, current.cost + 1, n, m, current.visited);
+            next.AddPair(current.path, i, j);
+            depthLimitedSearch(next, dest, limit - 1, n, m);
+        }
+        if (j - 1 >= 0 && !current.visited[i][j - 1] && !map[i][j - 1].equals("x")) {
+            current.visited[i][j - 1] = true;
+            State next = new State(i, j - 1, current.cost + 1, n, m, current.visited);
+            next.AddPair(current.path, i, j);
+            depthLimitedSearch(next, dest, limit - 1, n, m);
+        }
+        if (j + 1 < m && !current.visited[i][j + 1] && !map[i][j + 1].equals("x")) {
+            current.visited[i][j + 1] = true;
+            State next = new State(i, j + 1, current.cost + 1, n, m, current.visited);
+            next.AddPair(current.path, i, j);
+            depthLimitedSearch(next, dest, limit - 1, n, m);
+        }
+
+/*      // Diagonal and Anti-Diagonal Conditional Search
+        if (i - 1 >= 0 && j - 1 >= 0 && !current.visited[i - 1][j - 1] && !map[i - 1][j - 1].equals("x")) {
+            current.visited[i - 1][j - 1] = true;
+            State next = new State(i - 1, j - 1, current.cost + 1, n, m, current.visited);
+            next.AddPair(current.path, i, j);
+            depthLimitedSearch(next, dest, limit - 1, n, m);
+        }
+        if (i - 1 >= 0 && j + 1 < m && !current.visited[i - 1][j + 1] && !map[i - 1][j + 1].equals("x")) {
+            current.visited[i - 1][j + 1] = true;
+            State next = new State(i - 1, j + 1, current.cost + 1, n, m, current.visited);
+            next.AddPair(current.path, i, j);
+            depthLimitedSearch(next, dest, limit - 1, n, m);
+        }
+        if (i + 1 < n && j - 1 >= 0 && !current.visited[i + 1][j - 1] && !map[i + 1][j - 1].equals("x")) {
+            current.visited[i + 1][j - 1] = true;
+            State next = new State(i + 1, j - 1, current.cost + 1, n, m, current.visited);
+            next.AddPair(current.path, i, j);
+            depthLimitedSearch(next, dest, limit - 1, n, m);
+        }
+        if (i + 1 < n && j + 1 < m && !current.visited[i + 1][j + 1] && !map[i + 1][j + 1].equals("x")) {
+            current.visited[i + 1][j + 1] = true;
+            State next = new State(i + 1, j + 1, current.cost + 1, n, m, current.visited);
+            next.AddPair(current.path, i, j);
+            depthLimitedSearch(next, dest, limit - 1, n, m);
+        }
+*/
+        // If nothing is searches on this level
+    }
+
+    void printResult() {
+        System.out.println("\n\nIterative Deepening Search Result!");
+        System.out.print("Optimal Path Cost: " + optimalPath.size() + "\nOptimal Path: {");
+        for (int i = 0; i < optimalPath.size(); i++) {
+            System.out.print("(" + optimalPath.get(i).first + ", " + optimalPath.get(i).second + ")");
+            if (i != optimalPath.size() - 1) System.out.print(" ");
+        }
+        System.out.println("}");
+    } // #EndOfPrintResult!
+
+    void writeFile() throws IOException {
+        File file = new File("Output/IDS-Result.txt");
+
+        if (!file.exists())
+            file.createNewFile();
+
+        FileWriter fw = new FileWriter(file);
+        BufferedWriter bw = new BufferedWriter(fw);
+
+        bw.write("Iterative Deepening Search Result!");
+        bw.newLine();
+        bw.write("Optimal Path Cost: " + optimalPath.size());
+        bw.newLine();
+        bw.write("Optimal Path: {");
+        for (int i = 0; i < optimalPath.size(); i++) {
+            bw.write("(" + optimalPath.get(i).first + ", " + optimalPath.get(i).second + ")");
+            if (i != optimalPath.size() - 1) bw.write(" ");
+        }
+        bw.write("}");
+        bw.newLine();
+
+        bw.flush();
+        bw.close();
+        fw.close();
+    } // #EndOfWriteFile!
+
     private class Node implements Comparable<Node> {
         private final Point point;
         private int g, h;
         private final Node parent;
+
         public Node(Point point, Node parent, int h) {
             this.point = point;
             setG(parent);
             this.h = h;
             this.parent = parent;
         }
+
 
         private void setG(Node parent) {
             if (parent == null) {
@@ -343,4 +491,5 @@ public class PathFinder {
             return Integer.compare(g + h, o.g + o.h);
         }
     }
+
 }
