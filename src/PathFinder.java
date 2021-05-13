@@ -38,8 +38,8 @@ public class PathFinder {
         System.out.println();
     }
 
-    private void writeOutput(List<Point> path) throws IOException {
-        File output = new File("output4.txt");
+    private void writeOutput(List<Point> path, String algo) throws IOException {
+        File output = new File("output3.txt");
         StringBuilder stringBuilder = new StringBuilder();
         int cost = 0;
         for (int i = 0; i < path.size() - 1; i++) {
@@ -60,26 +60,52 @@ public class PathFinder {
                 stringBuilder.append(" ");
             }
         }
-        cost += map[path.get(path.size() - 1).x][path.get(path.size() - 1).y].charAt(0) - '0';
+        if (algo.equals("astar"))
+            cost += map[path.get(path.size() - 1).x][path.get(path.size() - 1).y].charAt(0) - '0';
+        if (algo.equals("bbfs"))
+            cost = path.size() - 1;
         FileWriter fileWriter = new FileWriter(output);
         fileWriter.write(stringBuilder.toString() + "\n");
         fileWriter.write(cost + "\n");
-        fileWriter.write(path.size() + "\n\n");
+        fileWriter.write(path.size() - 1 + "\n\n");
         fileWriter.close();
     }
 
-    public void findRoute() throws IOException {
+    public void findRouteAStar() throws IOException {
         while (true) {
             var nearestButter = findNearestButter();
             if (nearestButter == null)
                 break;
             var route = aStar(nearestButter);
             if (route != null) {
-                var path = robotPath(route);
+                var path = robotPathAStar(route);
                 if (path != null) {
                     path.forEach(System.out::println);
                     System.out.println("################################");
-                    writeOutput(path);
+                    writeOutput(path, "astar");
+                }else {
+                    System.out.println("There is no route.");
+                    break;
+                }
+            }else {
+                System.out.println("There is no route.");
+                break;
+            }
+        }
+    }
+
+    public void findRouteBBFS() throws IOException {
+        while (true) {
+            var nearestButter = findNearestButter();
+            if (nearestButter == null)
+                break;
+            var route = bbfs(nearestButter);
+            if (route != null) {
+                var path = robotPathBBFS(route);
+                if (path != null) {
+                    path.forEach(System.out::println);
+                    System.out.println("################################");
+                    writeOutput(path, "bbfs");
                 }else {
                     System.out.println("There is no route.");
                     break;
@@ -204,39 +230,164 @@ public class PathFinder {
     }
 
     public List<Point> bbfs(Point butter){
-        List<Point> intersect;
-        Point dest;
-        int[][] mapInfo = new int[map.length][map[0].length];
-        HashMap<Point, Node> pointNode = new HashMap<>();
-        var startNode = new Node(butter, null, 0);
-        pointNode.put(butter, startNode);
-        var startQueue = new ArrayDeque<>(List.of(startNode));
-        HashMap<Point, ArrayDeque<Node>> queueDestMap = new HashMap<>();
-        for (Point p : findAllDest()) {
-            var node = new Node(p, null, 0);
-            queueDestMap.put(p, new ArrayDeque<>(List.of(node)));
-            pointNode.put(p, node);
+        var startQueue = new ArrayDeque<Node>();
+        var goalQueue = new ArrayDeque<Node>();
+        var startData = new ArrayList<Node>();
+        var goalData = new ArrayList<Node>();
+        var mapInfoStart = new int[map.length][map[0].length];
+        var mapInfoGoal = new int[map.length][map[0].length];
+        var dest = nearestPoint(butter, "p");
+        var saveStatusButter = new Point(butter);
+        var saveStatusGoal = new Point(dest);
+        startQueue.add(new Node(butter,null, 0));
+        goalQueue.add(new Node(dest, null, 0));
+        Point intersectPoint = null;
+        boolean findIntersection = false;
+        while (!startQueue.isEmpty() && !goalQueue.isEmpty()) {
+            var startNode = startQueue.poll();
+            map[butter.x][butter.y] = map[butter.x][butter.y].charAt(0) + "";
+            assert startNode != null;
+            butter = startNode.point;
+            mapInfoStart[butter.x][butter.y] = 1;
+            var butterNeighbors = neighbors(butter);
+            butterNeighbors.stream().filter(c -> mapInfoStart[c.x][c.y] == 0)
+                    .forEach(c -> {
+                        startQueue.add(new Node(c, startNode, 0));
+                        startData.add(new Node(c, startNode, 0));
+                        mapInfoStart[c.x][c.y] = 1;
+                    });
+            var goalNode = goalQueue.poll();
+            map[dest.x][dest.y] = map[dest.x][dest.y].charAt(0) + "";
+            assert goalNode != null;
+            dest = goalNode.point;
+            mapInfoGoal[dest.x][dest.y] = 1;
+            var destNeighbors = goalNeighbors(dest);
+            destNeighbors.stream().filter(c -> mapInfoGoal[c.x][c.y] == 0)
+                    .forEach(c -> {
+                        goalQueue.add(new Node(c, goalNode, 0));
+                        goalData.add(new Node(c, goalNode, 0));
+                        mapInfoGoal[c.x][c.y] = 1;
+                    });
+            for (int i = 0; i < map.length; i++) {
+                for (int j = 0; j < map[0].length; j++) {
+                    if (mapInfoGoal[i][j] == 1 && mapInfoStart[i][j] == 1) {
+                        findIntersection = true;
+                        intersectPoint = new Point(i, j);
+                        break;
+                    }
+                }
+                if (findIntersection)
+                    break;
+            }
+            if (findIntersection)
+                break;
         }
-        Node start = null;
-        Node end = null;
-        mapInfo[butter.x][butter.y] = 1;
-        for (var d : queueDestMap.keySet())
-            mapInfo[d.x][d.y] = 2;
-        while (!startQueue.isEmpty() && !queueDestMap.isEmpty()) {
-            start = startQueue.pop();
-            butter = start.point;
-
+        if (!findIntersection)
+            return null;
+        Node intersectionStart = null;
+        for (Node n : startData) {
+            if (n.point.equals(intersectPoint)) {
+                intersectionStart = n;
+                break;
+            }
         }
+        Node intersectionGoal = null;
+        for (Node n : goalData) {
+            if (n.point.equals(intersectPoint)) {
+                intersectionGoal = n;
+                break;
+            }
+        }
+        var path = new LinkedList<Point>();
+        while (intersectionStart != null) {
+            path.addFirst(intersectionStart.point);
+            intersectionStart = intersectionStart.parent;
+        }
+        while (intersectionGoal != null) {
+            path.addLast(intersectionGoal.point);
+            intersectionGoal = intersectionGoal.parent;
+        }
+        path.remove(intersectPoint);
+        map[saveStatusButter.x][saveStatusButter.y] = map[saveStatusButter.x][saveStatusButter.y].charAt(0) + "b";
+        map[saveStatusGoal.x][saveStatusGoal.y] = map[saveStatusGoal.x][saveStatusGoal.y].charAt(0) + "p";
+        return path;
     }
 
-    private List<Point> findAllDest() {
-        var result = new ArrayList<Point>();
-        Point point;
-        for (int i = 0; i < map.length; i++)
-            for (int j = 0; j < map[0].length; j++)
-                if (isGoal(point = new Point(i, j)))
-                    result.add(point);
-        return result;
+    public List<Point> bbfs(Point source, Point dest){
+        var startQueue = new ArrayDeque<Node>();
+        var goalQueue = new ArrayDeque<Node>();
+        var startData = new ArrayList<Node>();
+        var goalData = new ArrayList<Node>();
+        var mapInfoStart = new int[map.length][map[0].length];
+        var mapInfoGoal = new int[map.length][map[0].length];
+        startQueue.add(new Node(source,null, 0));
+        goalQueue.add(new Node(dest, null, 0));
+        Point intersectPoint = null;
+        boolean findIntersection = false;
+        while (!startQueue.isEmpty() && !goalQueue.isEmpty()) {
+            var startNode = startQueue.poll();
+            assert startNode != null;
+            source = startNode.point;
+            mapInfoStart[source.x][source.y] = 1;
+            var butterNeighbors = robotNeighbors(source);
+            butterNeighbors.stream().filter(c -> mapInfoStart[c.x][c.y] == 0)
+                    .forEach(c -> {
+                        startQueue.add(new Node(c, startNode, 0));
+                        startData.add(new Node(c, startNode, 0));
+                        mapInfoStart[c.x][c.y] = 1;
+                    });
+            var goalNode = goalQueue.poll();
+            assert goalNode != null;
+            dest = goalNode.point;
+            mapInfoGoal[dest.x][dest.y] = 1;
+            var destNeighbors = robotNeighbors(dest);
+            destNeighbors.stream().filter(c -> mapInfoGoal[c.x][c.y] == 0)
+                    .forEach(c -> {
+                        goalQueue.add(new Node(c, goalNode, 0));
+                        goalData.add(new Node(c, goalNode, 0));
+                        mapInfoGoal[c.x][c.y] = 1;
+                    });
+            for (int i = 0; i < map.length; i++) {
+                for (int j = 0; j < map[0].length; j++) {
+                    if (mapInfoGoal[i][j] == 1 && mapInfoStart[i][j] == 1) {
+                        findIntersection = true;
+                        intersectPoint = new Point(i, j);
+                        break;
+                    }
+                }
+                if (findIntersection)
+                    break;
+            }
+            if (findIntersection)
+                break;
+        }
+        if (!findIntersection)
+            return null;
+        Node intersectionStart = null;
+        for (Node n : startData) {
+            if (n.point.equals(intersectPoint)) {
+                intersectionStart = n;
+                break;
+            }
+        }
+        Node intersectionGoal = null;
+        for (Node n : goalData) {
+            if (n.point.equals(intersectPoint)) {
+                intersectionGoal = n;
+                break;
+            }
+        }
+        var path = new LinkedList<Point>();
+        while (intersectionStart != null) {
+            path.addFirst(intersectionStart.point);
+            intersectionStart = intersectionStart.parent;
+        }
+        while (intersectionGoal != null) {
+            path.addLast(intersectionGoal.point);
+            intersectionGoal = intersectionGoal.parent;
+        }
+        path.remove(intersectPoint);
+        return path;
     }
 
     public List<Point> ids(Point butter, Point dest){
@@ -261,7 +412,7 @@ public class PathFinder {
                 });
     }
 
-    public List<Point> robotPath(List<Point> butterPath) {
+    public List<Point> robotPathAStar(List<Point> butterPath) {
         var robotPath = new LinkedList<Point>();
         robotPath = (LinkedList<Point>) aStar(robotLocation, findBehind(butterPath.get(0), butterPath.get(1)));
         robotPath.add(butterPath.get(0));
@@ -272,6 +423,31 @@ public class PathFinder {
         for (int i = 1; i < butterPath.size() - 1; i++) {
             map[butterPath.get(i+1).x][butterPath.get(i+1).y] = map[butterPath.get(i+1).x][butterPath.get(i+1).y].charAt(0) + "p";
             var robotStep = aStar(robotLocation, findBehind(butterPath.get(i), butterPath.get(i + 1)));
+            robotStep.remove(0);
+            robotPath.addAll(robotStep);
+            robotPath.add(butterPath.get(i));
+            map[robotLocation.x][robotLocation.y] = map[robotLocation.x][robotLocation.y].charAt(0) + "";
+            robotLocation = robotPath.get(robotPath.size() - 1);
+            map[robotLocation.x][robotLocation.y] = map[butterPath.get(i).x][butterPath.get(i).y].charAt(0) + "r";
+        }
+        map[butterPath.get(butterPath.size() - 1).x][butterPath.get(butterPath.size() - 1).y] = "pb";
+        map[robotLocation.x][robotLocation.y] = map[robotLocation.x][robotLocation.y].charAt(0) + "";
+        robotLocation = robotPath.get(robotPath.size() - 1);
+        map[robotLocation.x][robotLocation.y] = map[robotLocation.x][robotLocation.y].charAt(0) + "r";
+        return robotPath;
+    }
+
+    public List<Point> robotPathBBFS(List<Point> butterPath) {
+        var robotPath = new LinkedList<Point>();
+        robotPath = (LinkedList<Point>) bbfs(robotLocation, findBehind(butterPath.get(0), butterPath.get(1)));
+        robotPath.add(butterPath.get(0));
+        map[robotLocation.x][robotLocation.y] = map[robotLocation.x][robotLocation.y].charAt(0) + "";
+        robotLocation = robotPath.get(robotPath.size() - 1);
+        map[robotLocation.x][robotLocation.y] = map[butterPath.get(0).x][butterPath.get(0).y].charAt(0) + "r";
+        map[butterPath.get(1).x][butterPath.get(1).y] = map[butterPath.get(1).x][butterPath.get(1).y].charAt(0) + "p";
+        for (int i = 1; i < butterPath.size() - 1; i++) {
+            map[butterPath.get(i+1).x][butterPath.get(i+1).y] = map[butterPath.get(i+1).x][butterPath.get(i+1).y].charAt(0) + "p";
+            var robotStep = bbfs(robotLocation, findBehind(butterPath.get(i), butterPath.get(i + 1)));
             robotStep.remove(0);
             robotPath.addAll(robotStep);
             robotPath.add(butterPath.get(i));
@@ -316,6 +492,24 @@ public class PathFinder {
         return result;
     }
 
+    private List<Point> goalNeighbors(Point point) {
+        var result = new ArrayList<Point>();
+        var translate = new Point(point);
+        translate.translate(1, 0);
+        if (isValidLocationGoal(new Point(translate), 'U'))
+            result.add(new Point(translate));
+        translate.translate(-2, 0);
+        if (isValidLocationGoal(new Point(translate), 'D'))
+            result.add(new Point(translate));
+        translate.translate(1, 1);
+        if (isValidLocationGoal(new Point(translate), 'L'))
+            result.add(new Point(translate));
+        translate.translate(0, -2);
+        if (isValidLocationGoal(new Point(translate), 'R'))
+            result.add(new Point(translate));
+        return result;
+    }
+
     private List<Point> robotNeighbors(Point point) {
         var result = new ArrayList<Point>();
         var translate = new Point(point);
@@ -343,6 +537,15 @@ public class PathFinder {
                 && checkDirection(new Point(point), direction);
     }
 
+    private boolean isValidLocationGoal(Point point, char direction) {
+        return point.x >= 0 && point.x < map.length
+                && point.y >= 0 && point.y < map[0].length
+                && !map[point.x][point.y].contains("x")
+                && !map[point.x][point.y].contains("b")
+                && !map[point.x][point.y].contains("r")
+                && checkDirectionGoal(new Point(point), direction);
+    }
+
     private boolean isValidLocation(Point point) {
         return point.x >= 0 && point.x < map.length
                 && point.y >= 0 && point.y < map[0].length
@@ -363,6 +566,23 @@ public class PathFinder {
             return isValidLocation(new Point(point));
         }else if (direction == 'D') {
             point.translate(-2, 0);
+            return isValidLocation(new Point(point));
+        }
+        return false;
+    }
+
+    private boolean checkDirectionGoal(Point point, char direction) {
+        if (direction == 'R') {
+            point.translate(0, -1);
+            return isValidLocation(new Point(point));
+        } else if (direction == 'L') {
+            point.translate(0, 1);
+            return isValidLocation(new Point(point));
+        } else if (direction == 'U') {
+            point.translate(1, 0);
+            return isValidLocation(new Point(point));
+        }else if (direction == 'D') {
+            point.translate(-1, 0);
             return isValidLocation(new Point(point));
         }
         return false;
